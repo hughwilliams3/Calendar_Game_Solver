@@ -10,12 +10,12 @@ import sys
 @dataclass
 class Graph:
     name: str
-    verts: list[tuple[int, int]]
+    verts: tuple[int, int]
 
 @dataclass
 class Piece:
     name: str
-    verts: list[tuple[int,int]]
+    verts: tuple[tuple[int,int]]
 
     def rotate90(self):
         x_max = max(x[0] for x in self.verts)
@@ -24,7 +24,6 @@ class Piece:
     def rotate180(self):
         x_max = max(x[0] for x in self.verts)
         y_max = max(y[1] for y in self.verts)
-        print(x_max,y_max)
         return tuple((-x+x_max,-y+y_max) for x, y in self.verts)
     
     def rotate270(self):
@@ -34,14 +33,40 @@ class Piece:
 
 
 def main() -> int:
-    X = Graph('X', [(x,y) for x in range(0,4) for y in range(0,4)])
+    V = Graph('X', ((x,y) for x in range(0,4) for y in range(0,4)))
 
-    U = Piece('U', [(0,0),(1,0),(2,0),(2,1),(0,1)])
-    L = Piece('L',[(0,0),(1,0),(2,0),(0,1),(0,2)])
-    t = Piece('t', [(0,0),(0,1),(0,2),(0,3),(1,1)])
+    pieces = {
+    "U" : Piece('U', ((0,0),(1,0),(2,0),(2,1),(0,1))),
+    "L" : Piece('L',((0,0),(1,0),(2,0),(0,1),(0,2))),
+    "t" : Piece('t', ((0,0),(0,1),(0,2),(0,3),(1,1)))
+    }
 
-    m = gp.Model
+    orientations = {}
+    for i in pieces:
+        orientations[f"{i}"] = pieces[i].verts
+        orientations[f"{i}+90"] = pieces[i].rotate90()
+        if pieces[i].rotate180() == i:
+            continue
+        else:
+            orientations[f"{i}+180"] = pieces[i].rotate180()
+            orientations[f"{i}+270"] = pieces[i].rotate270()
 
+
+    m = gp.Model()
+
+    #### Variables ####
+
+    # anchor points (each)
+
+    x = m.addVars(
+        pieces.keys(),
+        orientations,
+        V.verts,
+        vtype=GRB.BINARY,
+        name='anchor_point'
+    ) 
+    print(x['U','U+90',1,1])
+    # 
     
 
 
