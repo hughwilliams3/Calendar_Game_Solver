@@ -7,42 +7,84 @@ import sys
 
 
 
-@dataclass
 class Graph:
-    name: str
-    verts: set[int, int]
+    def __init__(self,name,verts):
+        self.name = name
+        self.verts = verts
 
-@dataclass
+
 class Piece:
-    name: str
-    parent: str
-    verts: set[tuple[int,int]]
-
-    def __post_init__(self):
-        self.verts = set(self.verts)
+    def __init__(self,name,parent,verts):
+        self.name=name
+        self.parent =  parent
+        self.verts = verts
         self.mirrored = self.mirror_y()
+        self.orientations = self.get_orientations()
 
-    def rotate90(self):
-        x_max = max(x[0] for x in self.verts)
-        return set((y,-x + x_max) for x, y in self.verts)
+    def rotate90(self,verts):
+        x_max = max(x for x, y in verts)
+        return set((y,-x + x_max) for x, y in verts)
     
-    def rotate180(self):
-        x_max = max(x[0] for x in self.verts)
-        y_max = max(y[1] for y in self.verts)
-        return set((-x+x_max,-y+y_max) for x, y in self.verts)
+    def rotate180(self,verts):
+        x_max = max(x for x, y in verts)
+        y_max = max(y for x, y in verts)
+        return set((-x+x_max,-y+y_max) for x, y in verts)
     
-    def rotate270(self):
-        y_max = max(y[1] for y in self.verts)
-        return set((-y+y_max,x) for x, y in self.verts)
+    def rotate270(self,verts):
+        y_max = max(y for x, y in verts)
+        return set((-y+y_max,x) for x, y in verts)
     
     def mirror_y(self):
-        x_max = max(x[0] for x in self.verts)
-        return set((-x+x_max,y) for x, y in self.verts)
+        x_max = max(x for x, y in self.verts)
+        verts_new = set((-x+x_max,y) for x, y in self.verts)
+        return verts_new
+    
+    def get_orientations(self):
+        orientations = {}
+        orientations['parent'] = self.verts
+        orientations['90'] = self.rotate90(self.verts)
+        if self.rotate180(self.verts) == self.verts:
+            return orientations
+        else:
+            orientations['180'] = self.rotate180(self.verts)
+            orientations['270'] = self.rotate270(self.verts)
+            if self.mirror_y() in orientations.values():
+                return orientations
+            else:
+                orientations['m'] = self.mirrored
+                orientations['m_90'] = self.rotate90(orientations['m'])
+                orientations['m_180'] = self.rotate180(self.mirrored)
+                orientations['m_270'] = self.rotate270(self.mirrored)
+                return orientations
+
+
     
 
+class CalendarGameModel:
+    def __init__(self,graph,pieces):
+        self.graph=graph
+        self.pieces=pieces
+        self.model=gp.Model()
 
-    
+    def add_variables(self):
+        for pc in self.pieces:
+            self.x = self.model.addVars(
+                self.pieces.keys(), # parent piece i
+                range(len(self.pieces[pc].orientations)), # orientation j #there are 8 possible orientations... could change the orientations thing to make it zero if isn't unique? or just a constraint that says only one of each parent is used, and all the orientations exist
+                self.graph.verts,# anchored on vertex (k,l)
+                vtype=GRB.BINARY 
+            )
 
+    def add_constraints(self):
+        for pc in self.pieces:
+            self.model.addConstr(gp.quicksum(self.x[i,j,k] for i in self.pieces.keys() for j in range(len(self.pieces[pc].orientations)) for k in self.graph.verts) == 3)
+
+    def solve_model(self):
+        self.model.optimize()
+        if self.model.Status == GRB.OPTIMAL:
+            print(f"Optimal objective: {self.model.ObjVal}")
+            for v in self.model.getVars():
+                print(f"{v.VarName} = {v.X}")
 
 def main() -> int:
     V = Graph('X', ((x,y) for x in range(0,4) for y in range(0,4)))
@@ -53,50 +95,17 @@ def main() -> int:
     "t" : Piece('t', 't', {(0,0),(0,1),(0,2),(0,3),(1,1)})
     }
 
-    # dictionary of all unique orientations of a shape, saved as instances of Piece class
-    orientations = {}
-    for i in pieces:
-        unmirrored = []
-        orientations[f"{i}"] = Piece(f"{i}",i, pieces[i].verts)
-        orientations[f"{i}+90"] = Piece(f"{i}+90",i,pieces[i].rotate90())
-        if pieces[i].rotate180() == i: # if the 180 degree rotation is the same as the original, then there are only two orientations and we can stop
-            continue
-        else:
-            orientations[f"{i}+180"] = Piece(f"{i}+180",i,pieces[i].rotate180())
-            orientations[f"{i}+270"] = Piece(f"{i}+270",i,pieces[i].rotate270())
-            unmirrored.append([
-                orientations[f"{i}"],
-                orientations[f"{i}+90"],
-                orientations[f"{i}+180"],
-                orientations[f"{i}+270"]
-                ])
-        if any(pieces[i].mirrored == orientations[j].verts for j in orientations): # if the mirrored version is contained in any of the original 4 rotations, we can stop
-            continue
-        else:
-            orientations[f"{i}_mir"] = Piece(f"{i}_mir",i,pieces[i].mirror_y())
-            orientations[f"{i}_mir+90"] = Piece(f"{i}_mir+90", i,orientations[f"{i}_mir"].rotate90())
-            orientations[f"{i}_mir+180"] = Piece(f"{i}_mir+180", i,orientations[f"{i}_mir"].rotate180())
-            orientations[f"{i}_mir+270"] = Piece(f"{i}_mir+270", i,orientations[f"{i}_mir"].rotate270())
 
-    print(orientations)
-    for i in orientations:
-        if orientations[i].parent == 't':
-            print(orientations[i].verts)
- 
-
-    m = gp.Model()
+    m = CalendarGameModel(V,pieces)
+    m.add_variables()
+    m.add_constraints()
+    m.solve_model()
 
     #### Variables ####
 
     # anchor points (each)
 
-    x = m.addVars(
-        pieces.keys(),
-        orientations,
-        V.verts,
-        vtype=GRB.BINARY,
-        name='anchor_point'
-    )
+
     
 
 
