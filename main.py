@@ -10,7 +10,7 @@ import sys
 class Graph:
     def __init__(self,name,verts):
         self.name = name
-        self.verts = verts
+        self.verts = gp.tuplelist(verts)
 
 
 class Piece:
@@ -56,35 +56,70 @@ class Piece:
                 orientations['m_180'] = self.rotate180(self.mirrored)
                 orientations['m_270'] = self.rotate270(self.mirrored)
                 return orientations
+        
 
 
-    
 
 class CalendarGameModel:
     def __init__(self,graph,pieces):
         self.graph=graph
         self.pieces=pieces
         self.model=gp.Model()
+        self.orientations_set = self.get_orientations_set()
+        self.full_pcs_set = self.get_ornts_and_anchors()
+    
+    def get_orientations_set(self):
+        orientations_set = {}
+        for piece_name in self.pieces:
+            for ornt in self.pieces[piece_name].orientations:
+                orientations_set[piece_name, ornt] = self.pieces[piece_name].orientations[ornt]
+                print(f"{piece_name}, {ornt}, {self.pieces[piece_name].orientations[ornt]}")
+        print(orientations_set)
+        return orientations_set
+        
+
+    def get_ornts_and_anchors(self):
+        self.full_pcs_set = {}
 
     def add_variables(self):
-        for pc in self.pieces:
-            self.x = self.model.addVars(
-                self.pieces.keys(), # parent piece i
-                range(len(self.pieces[pc].orientations)), # orientation j #there are 8 possible orientations... could change the orientations thing to make it zero if isn't unique? or just a constraint that says only one of each parent is used, and all the orientations exist
-                self.graph.verts,# anchored on vertex (k,l)
-                vtype=GRB.BINARY 
-            )
+        self.x = {}
+        for piece_name, piece in self.pieces.items():
+           # print(f"\nPiece: {piece_name}")
+           # print(piece.orientations.keys())
 
+            for orientation in piece.orientations:
+                #print(f"Creating orientation: {orientation}")
+
+                count = 0
+                for anchor in self.graph.verts:
+                    self.x[piece_name, orientation, anchor] = self.model.addVar(
+                        vtype=GRB.BINARY,
+                        name=f"{piece_name}, {orientation}, {anchor}"
+                    )
+                    count += 1
+
+               # print(f"  Created {count} variables")
+                    
     def add_constraints(self):
+        # each piece is used exactly once
         for pc in self.pieces:
-            self.model.addConstr(gp.quicksum(self.x[i,j,k] for i in self.pieces.keys() for j in range(len(self.pieces[pc].orientations)) for k in self.graph.verts) == 3)
+            self.model.addConstr(
+                gp.quicksum(self.x[pc,j,k] 
+                    for j in self.pieces[pc].orientations
+                    for k in self.graph.verts) == 1)
+        
+        # no points are shared
+
+    def set_objective(self):
+        self.model.setObjective(gp.quicksum(self.x[i,j,k] for i in self.pieces.keys() for j in self.pieces[i].orientations for k in self.graph.verts))
+        self.model.ModelSense = GRB.MINIMIZE
 
     def solve_model(self):
         self.model.optimize()
-        if self.model.Status == GRB.OPTIMAL:
-            print(f"Optimal objective: {self.model.ObjVal}")
-            for v in self.model.getVars():
-                print(f"{v.VarName} = {v.X}")
+       # if self.model.Status == GRB.OPTIMAL:
+           # print(f"Optimal objective: {self.model.ObjVal}")
+            #for v in self.model.getVars():
+                #print(f"{v.VarName} = {v.X}")
 
 def main() -> int:
     V = Graph('X', ((x,y) for x in range(0,4) for y in range(0,4)))
@@ -96,11 +131,16 @@ def main() -> int:
     }
 
 
+
     m = CalendarGameModel(V,pieces)
     m.add_variables()
     m.add_constraints()
+    x_verts = m.x['U','parent',(0,0)]
+    print(x_verts)
+
     m.solve_model()
 
+    print(x_verts)
     #### Variables ####
 
     # anchor points (each)
