@@ -79,19 +79,19 @@ class CalendarGameModel:
         self.full_pcs_set = {}
         for anch in self.graph.verts:
             for ornt in self.orientations_set.keys():
-                self.full_pcs_set[ornt,anch] = set((x+anch[0],y+anch[1]) for x,y in self.orientations_set[ornt])
+                self.full_pcs_set[ornt[0],ornt[1],anch] = set((x+anch[0],y+anch[1]) for x,y in self.orientations_set[ornt])
                 #print(ornt, anch, self.full_pcs_set[ornt,anch])
         #print(self.full_pcs_set)
         return self.full_pcs_set
 
     def add_variables(self):
         self.x = {} # main decision variable, for whether a specific piece is used and in which orientation per anchor point
-        for piece_name in self.full_pcs_set:
-           # print(f"\nPiece: {piece_name}")
+        for piece in self.full_pcs_set:
+            #print(f"\nPiece: {piece}")
            # print(piece.orientations.keys())
-            self.x[piece_name] = self.model.addVar(
+            self.x[piece] = self.model.addVar(
                 vtype=GRB.BINARY,
-                name=f"{piece_name}"
+                name=f"{piece}"
             )
 
         #print(f"self.x: \n {self.x}")    
@@ -111,14 +111,17 @@ class CalendarGameModel:
         # indicator constraint
 
 
-        # each piece is used maximum of once
+        # each piece is used exactly of once
         #print(self.full_pcs_set)
         for parent in self.pieces:
             self.model.addConstr(
-                gp.quicksum(self.x[(parent,ornt),anch] 
+                gp.quicksum(
+                    self.x[parent, ornt, anch]
                     for ornt in self.pieces[parent].orientations
-                    for anch in self.graph.verts) <= 1
-                    )
+                    for anch in self.graph.verts
+                ) == 1,
+                name=f"parent_used_once_{parent}"
+            )
             #print(self.x)
         
         self.model.update()
@@ -130,32 +133,24 @@ class CalendarGameModel:
                 continue
             else:
                 self.model.addConstr(
-                    self.x[pc] == 0
+                    self.x[pc] == 0,
+                    name="pieces_in_gameboard"
                 )
 
         # pieces cannot overlap
         #disjoint_sets = 0
         #overlapping_sets = 0
         #print(self.full_pcs_set)
-        for pc1,pc1verts in self.full_pcs_set.items():
-            for pc2,pc2verts in self.full_pcs_set.items():
-                if pc1verts.isdisjoint(pc2verts):
-                    #print(f"{pc1verts} disjoint {pc2verts}")
+        items = list(self.full_pcs_set.items())
+        for i in range(len(items)):
+            pc1, pc1verts = items[i]
+            for j in range(i+1, len(items)):
+                pc2, pc2verts = items[j]
+                if not pc1verts.isdisjoint(pc2verts):
                     self.model.addConstr(
-                        self.x[pc1] + self.x[pc2] == 0
+                        self.x[pc1] + self.x[pc2] <= 1,
+                        name="dont_overlap"
                     )
-                    continue
-                    #disjoint_sets += 1
-                else:
-                    
-                    #print(self.x[pc1])
-                    #print("self.x[pc1]^")
-                    self.model.addConstr(
-                        self.x[pc1] + self.x[pc2] <= 1
-                    )
-                    #overlapping_sets += 1
-                    #print(f"not disjoint: {pc1verts,pc2verts}")
-                    continue
         #print(f"disjoint sets: {disjoint_sets}")
         #print(f"overlapping sets: {overlapping_sets}")
         self.model.update()
@@ -164,25 +159,24 @@ class CalendarGameModel:
         # no points are shared
         for pt in self.graph.verts:
             self.model.addConstr(
-                gp.quicksum(self.v[i,pt] for i in self.full_pcs_set) ==1
+                gp.quicksum(self.v[i,pt] for i in self.full_pcs_set) <=1,
+                name="points_covered_once"
             )
         self.model.update()
 
         for p, pverts in self.full_pcs_set.items():
             for vrt in self.graph.verts:
                 # vert v can only be covered by a piece if that piece contains that point
-                if vrt in pverts: 
-                    print(f"{vrt} in {pverts}")
-                    self.model.addConstr(self.v[p,vrt] <= 1)
-                    self.model.addConstr(self.v[p,vrt] >= self.x[p])
+                if vrt in pverts:
+                    self.model.addConstr(self.v[p,vrt] == self.x[p], name="v_equals_x_when_covering")
                 else:
-                    print(f"{vrt} not in {pverts}")
-                    self.model.addConstr(self.v[p,vrt] == 0)
+                    self.model.addConstr(self.v[p,vrt] == 0, name="vert_not_in_piece")
                 # if a piece is used, all of its vertices are covered
-                print(self.x[p])
+                #print(self.x[p])
+                    
+                    
+
         self.model.update()
-
-
 
 
     def set_objective(self):
@@ -211,6 +205,13 @@ def main() -> int:
     m = CalendarGameModel(V,pieces)
     m.add_variables()
     m.add_constraints()
+
+    """m.model.update()
+    for parent in m.pieces:
+        cname = f"max_one_{parent}"  # or whatever gurobi auto-named it
+    for c in m.model.getConstrs():
+        if 'U' in c.ConstrName or True:  # just dump all constraints for now
+            print(c.ConstrName, ":", m.model.getRow(c), c.Sense, c.RHS)"""
 
     m.solve_model()
 
