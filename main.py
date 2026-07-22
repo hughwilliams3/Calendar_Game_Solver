@@ -1,14 +1,16 @@
 import gurobipy as gp
 from gurobipy import GRB
+import ast
 
 import sys
 
 
 
 class Graph:
-    def __init__(self,name,verts):
+    def __init__(self,name,omit,verts):
         self.name = name
-        self.verts = gp.tuplelist(verts)
+        self.verts = gp.tuplelist(verts - omit)
+        self.omit = gp.tuplelist(omit)
 
 
 class Piece:
@@ -185,19 +187,48 @@ class CalendarGameModel:
 
     def solve_model(self):
         self.model.optimize()
+
+        target = ('hook', 'm_180', (2, 2))
+        matches = [k for k in self.full_pcs_set if k == target]
+        print("exact match found:", matches)
+
+        close = [k for k in self.full_pcs_set if k[0]=='hook' and k[2]==(2,2)]
+        print("close matches (any ornt string):", [repr(k) for k in close])
+
+        #print(self.full_pcs_set)
+        #print(self.full_pcs_set[('hook', 'm_180', (2, 2))])
         if self.model.Status == GRB.OPTIMAL:
             print(f"Optimal objective: {self.model.ObjVal}")
-            for v in self.model.getVars():
-                if v.X == 1:
-                    print(f"{v.VarName} = {v.X}")
+            for key,var in self.x.items():
+                if var.X == 1:
+                    print(f"{var.VarName} = {var.X}")
+                    print(f"{self.full_pcs_set[key]}")
+                    print("\n")
 
 def main() -> int:
-    V = Graph('X', ((x,y) for x in range(0,4) for y in range(0,4)))
+    # This is the game board.
+    V = Graph('X', {(0,5),(4,2)}, {
+                (0,6),(1,6),(2,6),(3,6),(4,6),(5,6),
+                (0,5),(1,5),(2,5),(3,5),(4,5),(5,5),
+                (0,4),(1,4),(2,4),(3,4),(4,4),(5,4),(6,4),
+                (0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),
+                (0,2),(1,2),(2,2),(3,2),(4,2),(5,2),(6,2),
+                (0,1),(1,1),(2,1),(3,1),(4,1),(5,1),(6,1),
+                (0,0),(1,0),(2,0)
+                    }
+                )
+    
+    print(V.verts)
 
     pieces = {
     "U" : Piece('U', 'U', {(0,0),(1,0),(2,0),(2,1),(0,1)}),
     "L" : Piece('L', 'L', {(0,0),(1,0),(2,0),(0,1),(0,2)}),
-    "t" : Piece('t', 't', {(0,0),(0,1),(0,2),(0,3),(1,1)})
+    "t" : Piece('t', 't', {(0,0),(0,1),(0,2),(0,3),(1,1)}),
+    "zig": Piece('zig', 'zig', {(0,0),(1,0),(1,1),(1,2),(2,2)}),
+    "zag": Piece('zag', 'zag', {(0,0),(1,0),(2,0),(2,1),(3,1)}),
+    "rect": Piece('rect', 'rect', {(0,0),(1,0),(0,1),(1,1),(0,2),(1,2)}),
+    "goto": Piece('goto','goto', {(0,0),(1,0),(2,0),(1,1),(0,1)}),
+    "hook": Piece('hook','hook', {(0,0),(0,1),(0,2),(0,3),(1,3)})
     }
 
 
