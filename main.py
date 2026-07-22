@@ -241,14 +241,14 @@ def main() -> int:
     }
 
     piece_colors = {
-    "U" : "#BBFFAD",
-    "L" : "#ADFFE8",
-    "t" : "#ADC7FF",
-    "zig": "#CCADFF",
-    "zag": "#FFADFF",
-    "rect": "#FFADAD",
-    "goto": "#FFDEAD",
-    "hook": "#FFF3AD"
+    "U" : "#B32D14",
+    "L" : "#B37E14",
+    "t" : "#D6D20B",
+    "zig": "#19D60B",
+    "zag": "#02C2AF",
+    "rect": "#0218C2",
+    "goto": "#640694",
+    "hook": "#940678"
     }
 
 
@@ -265,6 +265,8 @@ def main() -> int:
     # Streamlit app
     # ---------------------------------------------------------------------------
     
+
+
     st.set_page_config(page_title="Calendar Puzzle Solver", layout="centered")
     st.title("Calendar Puzzle Solver")
     
@@ -293,7 +295,7 @@ def main() -> int:
     ### Generate game board
 
     for y in reversed(range(board_height)):
-        cols = st.columns(board_width)
+        cols = st.columns(board_width,gap=None)
 
         for x in range(board_width):
             with cols[x]:
@@ -329,6 +331,7 @@ def main() -> int:
         #st.write(st.session_state.soln)
 
         st.session_state.omitted_vars = set()
+        st.session_state.solve_date = set()
 
     
     ### Color the game board
@@ -343,7 +346,7 @@ def main() -> int:
 
 
     for y in reversed(range(board_height)):
-        cols = st.columns(board_width)
+        cols = st.columns(board_width,gap=None)
 
         for x in range(board_width):
             with cols[x]:
@@ -361,12 +364,16 @@ def main() -> int:
                         <div style="
                             background-color:{color};
                             color:black;
-                            width:50px;
-                            height:50px;
                             border-radius:10px;
+                            width:100%;
+                            height:80px;
+                            margin:-1px;
+                            padding:0;
+                            border:1px solid black;
                             display:flex;
                             align-items:center;
                             justify-content:center;
+                            box-sizing:border-box;
                             ">
                             {coord_to_name[(x,y)]}
                         </div>
