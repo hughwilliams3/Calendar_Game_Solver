@@ -1,5 +1,6 @@
 import gurobipy as gp
 from gurobipy import GRB
+import streamlit as st
 import ast
 
 import sys
@@ -199,11 +200,20 @@ class CalendarGameModel:
         #print(self.full_pcs_set[('hook', 'm_180', (2, 2))])
         if self.model.Status == GRB.OPTIMAL:
             print(f"Optimal objective: {self.model.ObjVal}")
+            #st.write(f"Optimal objective: {self.model.ObjVal}")
             for key,var in self.x.items():
                 if var.X == 1:
+                    name = ast.literal_eval(var.VarName)
+                    st.session_state.soln[name[0]] = self.full_pcs_set[key]
                     print(f"{var.VarName} = {var.X}")
+                    #st.write(f"{var.VarName} = {var.X}")
                     print(f"{self.full_pcs_set[key]}")
+                    #st.write(f"{self.full_pcs_set[key]}")
                     print("\n")
+
+
+
+
 
 def main() -> int:
     # This is the game board.
@@ -218,7 +228,6 @@ def main() -> int:
                     }
                 )
     
-    print(V.verts)
 
     pieces = {
     "U" : Piece('U', 'U', {(0,0),(1,0),(2,0),(2,1),(0,1)}),
@@ -231,26 +240,139 @@ def main() -> int:
     "hook": Piece('hook','hook', {(0,0),(0,1),(0,2),(0,3),(1,3)})
     }
 
+    piece_colors = {
+    "U" : "#BBFFAD",
+    "L" : "#ADFFE8",
+    "t" : "#ADC7FF",
+    "zig": "#CCADFF",
+    "zag": "#FFADFF",
+    "rect": "#FFADAD",
+    "goto": "#FFDEAD",
+    "hook": "#FFF3AD"
+    }
 
 
-    m = CalendarGameModel(V,pieces)
-    m.add_variables()
-    m.add_constraints()
 
-    """m.model.update()
-    for parent in m.pieces:
-        cname = f"max_one_{parent}"  # or whatever gurobi auto-named it
-    for c in m.model.getConstrs():
-        if 'U' in c.ConstrName or True:  # just dump all constraints for now
-            print(c.ConstrName, ":", m.model.getRow(c), c.Sense, c.RHS)"""
-
-    m.solve_model()
+    
+    #m.add_variables()
+    #m.add_constraints()
 
 
-    #### Variables ####
+    #m.solve_model()
 
-    # anchor points (each)
+    ### streamlit app test zone 
+    # ---------------------------------------------------------------------------
+    # Streamlit app
+    # ---------------------------------------------------------------------------
+    
+    st.set_page_config(page_title="Calendar Puzzle Solver", layout="centered")
+    st.title("Calendar Puzzle Solver")
+    
+    board_width = 7
+    board_height = 7
 
+    valid_verts = {"Jan": (0,6),"Feb": (1,6), "Mar": (2,6),"Apr": (3,6),"May": (4,6),"Jun": (5,6),
+                "Jul": (0,5),"Aug": (1,5),"Sep": (2,5),"Oct": (3,5),"Nov": (4,5),"Dec": (5,5),
+                1: (0,4),2: (1,4),3: (2,4),4: (3,4),5: (4,4),6: (5,4),7: (6,4),
+                8: (0,3),9: (1,3),10: (2,3),11: (3,3),12: (4,3),13: (5,3),14: (6,3),
+                15: (0,2),16: (1,2),17: (2,2),18: (3,2),19: (4,2),20: (5,2),21: (6,2),
+                22: (0,1),23: (1,1),24: (2,1),25: (3,1),26: (4,1),27: (5,1),28: (6,1),
+                29: (0,0),30: (1,0),31: (2,0)}
+    
+    coord_to_name = {coord: name for name, coord in valid_verts.items()}
+
+    if "omitted_vars" not in st.session_state:
+        st.session_state.omitted_vars = set()
+
+    if "solve_date" not in st.session_state:
+        st.session_state.solve_date = set()
+
+    if "soln" not in st.session_state:
+        st.session_state.soln = dict()
+
+    ### Generate game board
+
+    for y in reversed(range(board_height)):
+        cols = st.columns(board_width)
+
+        for x in range(board_width):
+            with cols[x]:
+                if (x, y) in coord_to_name:
+                    name = coord_to_name[(x, y)]
+                    if st.button(str(name), key=(x, y), use_container_width=True):
+                        st.session_state.solve_date.add(name)
+                        st.session_state.omitted_vars.add((x, y))
+
+    st.write(f"Solve for {st.session_state.solve_date}")
+
+    ### solve button
+    game_board = Graph('X', st.session_state.omitted_vars, {
+                (0,6),(1,6),(2,6),(3,6),(4,6),(5,6),
+                (0,5),(1,5),(2,5),(3,5),(4,5),(5,5),
+                (0,4),(1,4),(2,4),(3,4),(4,4),(5,4),(6,4),
+                (0,3),(1,3),(2,3),(3,3),(4,3),(5,3),(6,3),
+                (0,2),(1,2),(2,2),(3,2),(4,2),(5,2),(6,2),
+                (0,1),(1,1),(2,1),(3,1),(4,1),(5,1),(6,1),
+                (0,0),(1,0),(2,0)
+                    }
+                )
+
+    if st.button("Solve", key = 'solve'):
+        m = CalendarGameModel(game_board,pieces)        
+        m.add_variables()
+        m.add_constraints()
+
+        m.set_objective()
+        m.solve_model()
+
+        #st.write("Solution:")
+        #st.write(st.session_state.soln)
+
+        st.session_state.omitted_vars = set()
+
+    
+    ### Color the game board
+    assigned = {}
+
+    for pt in game_board.verts:
+        for key, verts in st.session_state.soln.items():
+            if pt in verts:
+                assigned[pt] = key
+
+    print(assigned)
+
+
+    for y in reversed(range(board_height)):
+        cols = st.columns(board_width)
+
+        for x in range(board_width):
+            with cols[x]:
+                if (x,y) in coord_to_name:
+                    piece = assigned.get((x,y))
+
+                    if piece:
+                        color = piece_colors[piece]
+                    else:
+                        color = "#DDDDDD"
+
+                    #st.write((x, y), piece, color)
+                    st.markdown(
+                        f"""
+                        <div style="
+                            background-color:{color};
+                            color:black;
+                            width:50px;
+                            height:50px;
+                            border-radius:10px;
+                            display:flex;
+                            align-items:center;
+                            justify-content:center;
+                            ">
+                            {coord_to_name[(x,y)]}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
 
     
 
