@@ -1,3 +1,5 @@
 Every morning while he drinks his coffee my dad solves a calendar puzzle for that date, often sending us his solution. The goal is to conceal every square except for that month and day using a set of pentominoes (and one hexomino, the 2x3 rectangle). He has no particular strategy, but still manages to solve the puzzle faster than anyone in my family. Hence, I created this IP model to generate a valid tiling for any given date. Now I can solve the puzzle faster than him every morning and send him a screenshot of my solution before he has a chance to solve it for himself.
 
 This was an exercise in Integer Programming and Gurobi's python API. I modeled the game as a graph covering problem. Each polyomino has its own equivalence class in which each unique orientation (mirrored, rotated) is equivalent to the (arbitrarily chosen) parent orientation. I am currently working on writing up a brief mathematical formulation of the program to include in this repository.
+
+I also had a chance to dip my toes into the streamlit library for python web applications. I forsee these incredibly simple tools coming in handy in my future work for visualizing and interfacing with data.
